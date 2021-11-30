@@ -4,14 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lego query</title>
+<link rel="stylesheet" type="text/css" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.1/font/bootstrap-icons.css">
 <script type="text/javascript" src="https://cdn.bootcss.com/jquery/2.2.2/jquery.min.js"></script>
 <script type="text/javascript" src="https://cdn.bootcdn.net/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js"></script>
 <script src="https://cdn.bootcss.com/vue/2.5.17-beta.0/vue.min.js"></script>
-<link rel="stylesheet" type="text/css" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.1/font/bootstrap-icons.css">
+<script src="https://cdn.bootcdn.net/ajax/libs/socket.io/4.1.3/socket.io.min.js"></script>
 <style type="text/css">
 .mainTab { margin-top: 15px; margin-bottom: 15px; }
 .avlTbl th { background-color: #f7f7f7; }
+.na { color: #999; }
+.error { color: #f00; }
 </style>
 </head>
 <body>
@@ -19,7 +22,7 @@
     <div style="margin-bottom:15px;position: absolute;right:15px;">
       <span v-if="taskNum > 0" style="color:#999;">{{ taskNum }} tasks running.</span>
       <span v-else style="color:#999;">Last update: {{ updateTime }}</span>
-      <button class="btn btn-warning btn-sm" @click="refresh" style="margin-left:15px;">Update {{ site }}</button>
+      <button class="btn btn-warning btn-sm" @click="refresh" style="margin-left:15px;" :disabled="taskNum > 0">Update</button>
     </div>
 
     <ul class="nav nav-tabs mainTab">
@@ -38,26 +41,20 @@
             <tr>
               <th width="15%">ID</th>
               <th>Name</th>
-              <th width="15%"><a @click="sortList('price')" href="javascript:void(0)">Price <i v-if="sortField=='price'" :class="'bi-sort-'+(sortAsc?'down':'up')"></i></a></th>
-              <th width="15%"><a @click="sortList('qty')" href="javascript:void(0)">Qty <i v-if="sortField=='qty'" :class="'bi-sort-'+(sortAsc?'down':'up')"></i></a></th>
-              <th width="15%"><a @click="sortList('sellers')" href="javascript:void(0)">Sellers <i v-if="sortField=='sellers'" :class="'bi-sort-'+(sortAsc?'down':'up')"></i></a></th>
+              <th width="15%"><a @click="handleSort('price')" href="javascript:void(0)">Price <i v-if="sortField=='price'" :class="'bi-sort-'+(sortAsc?'up':'down')"></i></a></th>
+              <th width="15%"><a @click="handleSort('qty')" href="javascript:void(0)">Qty <i v-if="sortField=='qty'" :class="'bi-sort-'+(sortAsc?'up':'down')"></i></a></th>
+              <th width="15%"><a @click="handleSort('sellers')" href="javascript:void(0)">Sellers <i v-if="sortField=='sellers'" :class="'bi-sort-'+(sortAsc?'up':'down')"></i></a></th>
               <th width="15%">Operation</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in listItem">
-              <th>{{ item.item_id }}</th>
-              <template v-if="item.status == 6">
-                <td><a :href="item.detail.detail_url" target="_blank">{{ item.detail.name }}</a></td>
-                <td>{{ item.detail.new_price }}</td>
-                <td>{{ item.detail.new_qty }}</td>
-                <td>{{ item.detail.new_sellers }}</td>
-              </template>
-              <template v-else-if="item.status == 1">
-                <td colspan="4">Fetching...</td>
-              </template>
-              <template v-else-if="item.status == 0">
-                <td colspan="4">Waiting...</td>
+              <th>{{ item.item_id }} <span v-if="item.status==1||item.status==0" class="spinner-border spinner-border-sm"></span></th>
+              <template v-if="item.status != -1">
+                <td><a v-if="item.detail" :href="item.detail.detail_url" target="_blank">{{ item.detail.name }}</a></td>
+                <td><span v-if="item.detail">{{ item.detail.new_price }}</span></td>
+                <td><span v-if="item.detail">{{ item.detail.new_qty }}</span></td>
+                <td><span v-if="item.detail">{{ item.detail.new_sellers }}</span></td>
               </template>
               <template v-else>
                 <td colspan="4">Error</td>
@@ -84,11 +81,11 @@
           </thead>
           <tbody>
             <tr v-for="item in listItem">
-              <th>{{ item.item_id }}</th>
-              <template v-if="item.status == 6">
+              <th>{{ item.item_id }} <span v-if="item.status==0||item.status==1" class="spinner-border spinner-border-sm"></span></th>
+              <template v-if="item.status != -1">
                 <td>{{ item.name }}</td>
                 <td>
-                  <table class="table table-bordered avlTbl">
+                  <table v-if="item.regions" class="table table-bordered avlTbl">
                     <tr>
                       <th>Region</th>
                       <th width="16%" v-for="(dtl, region) in item.regions">
@@ -99,25 +96,23 @@
                     <tr>
                       <th>Flags</th>
                       <td v-for="dtl in item.regions">
-                        <template v-if="dtl">{{ dtl.flags }}</template>
-                        <template v-else>N/A</template>
+                        <span v-if="dtl===0" class="spinner-border spinner-border-sm"></span>
+                        <template v-else-if="dtl===-1"><span class="error">Error</span></template>
+                        <template v-else-if="dtl">{{ dtl.flags }}</template>
+                        <template v-else><span class="na">N/A</span></template>
                       </td>
                     </tr>
                     <tr>
                       <th>Availability</th>
                       <td v-for="dtl in item.regions">
-                        <template v-if="dtl">{{ dtl.avls }}</template>
-                        <template v-else>N/A</template>
+                        <span v-if="dtl===0" class="spinner-border spinner-border-sm"></span>
+                        <template v-else-if="dtl===-1"><span class="error">Error</span></template>
+                        <template v-else-if="dtl">{{ dtl.avls }}</template>
+                        <template v-else><span class="na">N/A</span></template>
                       </td>
                     </tr>
                   </table>
                 </td>
-              </template>
-              <template v-else-if="item.status == 1">
-                <td colspan="2">Fetching...</td>
-              </template>
-              <template v-else-if="item.status == 0">
-                <td colspan="2">Waiting...</td>
               </template>
               <template v-else>
                 <td colspan="2">Error</td>
@@ -143,6 +138,7 @@
 
 <script>
 var baseUrl = "/";
+var socket = io.connect(baseUrl+'ws');
 
 var mainApp = new Vue({
     el: "#app",
@@ -161,11 +157,11 @@ var mainApp = new Vue({
     },
     methods: {
         initPage() {
+          var that = this;
           var site = $.cookie('lego_site');
           if (typeof site != 'undefined') {
             this.$data.site = site;
           }
-          this.getList();
 
           var sortField = $.cookie('lego_sortField');
           if (typeof sortField != 'undefined') {
@@ -176,6 +172,17 @@ var mainApp = new Vue({
           if (typeof sortAsc != 'undefined') {
             this.$data.sortAsc = sortAsc=='1' ? false : true;
           }
+
+          socket.on('onUpdate', function(msg){
+            console.log('onUpdate', msg);
+            var index = that.$data.listItem.findIndex(v => v.item_id == msg['item_id']);
+            that.$data.listItem.splice(index, 1, msg);
+            if(msg.site=='bricklink'){
+              that.sortList();
+            }
+          });
+
+          this.getList();
         },
         switchList(site) {
             if (site == this.$data.site) {
@@ -188,17 +195,20 @@ var mainApp = new Vue({
         },
         getList() {
           var that = this;
-          $.getJSON(baseUrl+'list', {site: this.$data.site}, function(res) {
+          var site = this.$data.site;
+          $.getJSON(baseUrl+'list', {site: site}, function(res) {
             if(res.errcode != 0){
               alert('获取列表失败');
               return;
             }
             that.$data.listItem = res.items;
-            that.sortList(that.$data.sortField);
             that.$data.taskNum = res.tasks;
             that.$data.updateTime = res.updateTime;
             if (res.regions_loc) {
               that.$data.regions_loc = res.regions_loc
+            }
+            if (site == 'bricklink') {
+              that.sortList();
             }
           });
         },
@@ -206,6 +216,10 @@ var mainApp = new Vue({
             var that = this;
             var itemId = this.$data.itemId;
             var site = this.$data.site;
+
+            // socket.emit('add', {item_id: itemId, site: site});
+
+            // return;
             $.ajax({
               url: baseUrl+'add',
               dataType: 'json',
@@ -223,6 +237,9 @@ var mainApp = new Vue({
                 alert('添加失败');
               }
             });
+        },
+        addItemCallback(evt){
+          console.log(evt)
         },
         delItem(itemId) {
             var that = this;
@@ -253,15 +270,24 @@ var mainApp = new Vue({
               that.$data.taskNum = res.tasks
             })
         },
-        sortList(field) {
-          console.log(field, this.$data.sortField);
+        handleSort(field) {
+          var sortField = this.$data.sortField;
           var sortAsc = this.$data.sortAsc;
-          if (field != this.$data.sortField) {
+          if (sortField != field) {
             sortAsc = false;
+          } else {
+            sortAsc = !sortAsc;
           }
           this.$data.sortField = field;
+          this.$data.sortAsc = sortAsc;
+          this.sortList();
           $.cookie('lego_sortField', field, {expires: 365});
           $.cookie('lego_sortAsc', sortAsc ? '0' : '1', {expires: 365});
+        },
+        sortList() {
+          var sortAsc = this.$data.sortAsc;
+          var field = this.$data.sortField;
+          console.log(sortAsc);
           if(field == 'qty') {
             this.$data.listItem.sort(sortAsc ? this.sortByQtyAsc : this.sortByQtyDesc);
           } else if(field == 'sellers') {
@@ -269,7 +295,6 @@ var mainApp = new Vue({
           } else if(field == 'price') {
             this.$data.listItem.sort(sortAsc ? this.sortByPriceAsc : this.sortByPriceDesc);
           }
-          this.$data.sortAsc = !sortAsc;
         },
         sortByQtyAsc(a, b) {
           return a.detail.new_qty - b.detail.new_qty;

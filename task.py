@@ -110,21 +110,22 @@ def search_lego(item_id, region):
         tb.print_exc()
 
 
-def init_task(rdb):
+def init_task(rdb, socketio):
     for site in SITES:
-        for item_id in rdb.smembers(f"legoList:{site}"):
-            item_key = f"legoItem:{site}:{item_id}"
-            if rdb.exists(item_key):
-                row = json.loads(rdb.get(item_key))
+        for lid in rdb.smembers(f"legoList:{site}"):
+            ckey = f"legoItem:{site}:{lid}"
+            row = rdb.get(ckey)
+            if row:
+                row = json.loads(row)
             else:
-                row = {'item_id': item_id, 'site': site, 'status': 0}
-                rdb.set(item_key, json.dumps(row))
+                row = {'item_id': lid, 'site': site, 'status': 0}
+                rdb.set(ckey, json.dumps(row))
             if row['status'] == 0:
                 print(f"Add task: {row}")
                 row['status'] = 1
-                rdb.set(item_key, json.dumps(row))
+                rdb.set(ckey, json.dumps(row))
                 rdb.lpush(f"legoTask:{site}", json.dumps(row))
-
+                socketio.emit('onUpdate', row, broadcast=True, namespace='/ws')
 
 
 if __name__ == '__main__':

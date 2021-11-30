@@ -9,9 +9,11 @@ from lxml import etree
 from datetime import datetime
 from const import *
 from task import init_task, search_bricklink, search_lego
+from flask_socketio import SocketIO, emit
 
 app = Flask(__name__, static_url_path='')
 app.secret_key = 'XubjIYaO7ZCba2jhFK'
+socketio = SocketIO(app)
 rdb = redis.StrictRedis('localhost', decode_responses=True)
 threadList = []
 
@@ -126,41 +128,47 @@ def fetch_data():
         try:
             for site in SITES:
                 task = rdb.lpop(f"legoTask:{site}")
-                if not task:
-                    time.sleep(5)
-                    continue
-                row = json.loads(task)
-                print(f"Process task: {row}")
-                if 'item_id' not in row or 'site' not in row:
-                    raise Exception(f"Row error: {row}")
-                rdb.set(f"legoUpdateTime:{site}", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                item_key = f"legoItem:{row['site']}:{row['item_id']}"
+                if task:
+                    break
+            if not task:
+                time.sleep(2)
+                continue
+            print(f"Process task: {task}")
+            row = json.loads(task)
+            if 'item_id' not in row or 'site' not in row:
+                raise Exception(f"Row error: {row}")
+            rdb.set(f"legoUpdateTime:{site}", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+            item_key = f"legoItem:{row['site']}:{row['item_id']}"
 
-                if row['site'] == 'bricklink':
-                    detail = search_bricklink(row['item_id'])
+            if row['site'] == 'bricklink':
+                detail = search_bricklink(row['item_id'])
+                if detail:
+                    row['status'] = 6
+                    row['detail'] = detail
+                else:
+                    row['status'] = -1
+                rdb.set(item_key, json.dumps(row))
+                socketio.emit('onUpdate', row, broadcast=True, namespace='/ws')
+            elif row['site'] == 'lego':
+                if 'regions' not in row:
+                    row['regions'] = {}
+                    for region in REGIONS:
+                        row['regions'][region] = 0
+                    rdb.set(item_key, json.dumps(row))
+                for region in REGIONS:
+                    detail = search_lego(row['item_id'], region)
                     if detail:
                         row['status'] = 6
-                        row['detail'] = detail
+                        if 'name' not in row or row['name'] == '':
+                            row['name'] = detail['name']
                     else:
-                        row['status'] = -1
+                        detail = -1
+                    row['regions'][region] = detail
                     rdb.set(item_key, json.dumps(row))
-                elif row['site'] == 'lego':
-                    if 'regions' not in row:
-                        row['regions'] = {}
-                        for region in REGIONS:
-                            row['regions'][region] = None
-                        rdb.set(item_key, json.dumps(row))
-                    for region in REGIONS:
-                        detail = search_lego(row['item_id'], region)
-                        if detail:
-                            row['status'] = 6
-                            if 'name' not in row or row['name'] == '':
-                                row['name'] = detail['name']
-                        row['regions'][region] = detail
-                        rdb.set(item_key, json.dumps(row))
-                    if row['status'] != 6:
-                        row['status'] = -1
-                        rdb.set(item_key, json.dumps(row))
+                    socketio.emit('onUpdate', row, broadcast=True, namespace='/ws')
+                if row['status'] != 6:
+                    row['status'] = -1
+                    rdb.set(item_key, json.dumps(row))
         except Exception as e:
             print(f"Task error: {e}")
             tb.print_exc()
@@ -168,8 +176,8 @@ def fetch_data():
 
 def query_task():
     while 1:
-        init_task(rdb)
-        time.sleep(5)
+        init_task(rdb, socketio)
+        time.sleep(1)
 
 
 def main():
@@ -184,11 +192,9 @@ def main():
     producer.start()
 
     try:
-        app.run(host='0.0.0.0')
+        socketio.run(app)
     except KeyboardInterrupt:
-        producer.cancel()
-        for i in range(MAX_THREAD_NUM):
-            threadList[i].cancel()
+        print('bye!')
 
 
 if __name__ == '__main__':
