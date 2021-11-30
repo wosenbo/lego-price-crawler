@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lego query</title>
+<script type="text/javascript" src="https://cdn.bootcss.com/jquery/2.2.2/jquery.min.js"></script>
+<script type="text/javascript" src="https://cdn.bootcdn.net/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js"></script>
+<script src="https://cdn.bootcss.com/vue/2.5.17-beta.0/vue.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.1/font/bootstrap-icons.css">
+<style type="text/css">
+.mainTab { margin-top: 15px; margin-bottom: 15px; }
+.avlTbl th { background-color: #f7f7f7; }
+</style>
+</head>
+<body>
+<div id="app" class="container-fluid">
+    <div style="margin-bottom:15px;position: absolute;right:15px;">
+      <span v-if="taskNum > 0" style="color:#999;">{{ taskNum }} tasks running.</span>
+      <span v-else style="color:#999;">Last update: {{ updateTime }}</span>
+      <button class="btn btn-warning btn-sm" @click="refresh" style="margin-left:15px;">Update {{ site }}</button>
+    </div>
+
+    <ul class="nav nav-tabs mainTab">
+      <li class="nav-item">
+        <a :class="'nav-link' + (site == 'bricklink' ? ' active' : '')" @click="switchList('bricklink')" href="javascript:void(0)">bricklink</a>
+      </li>
+      <li class="nav-item">
+        <a :class="'nav-link' + (site == 'lego' ? ' active' : '')" @click="switchList('lego')" href="javascript:void(0)">Lego</a>
+      </li>
+    </ul>
+
+    <!-- bricklink begin -->
+    <template v-if="site == 'bricklink'">
+        <table class="table">
+          <thead>
+            <tr>
+              <th width="15%">ID</th>
+              <th>Name</th>
+              <th width="15%"><a @click="sortList('price')" href="javascript:void(0)">Price <i v-if="sortField=='price'" :class="'bi-sort-'+(sortAsc?'down':'up')"></i></a></th>
+              <th width="15%"><a @click="sortList('qty')" href="javascript:void(0)">Qty <i v-if="sortField=='qty'" :class="'bi-sort-'+(sortAsc?'down':'up')"></i></a></th>
+              <th width="15%"><a @click="sortList('sellers')" href="javascript:void(0)">Sellers <i v-if="sortField=='sellers'" :class="'bi-sort-'+(sortAsc?'down':'up')"></i></a></th>
+              <th width="15%">Operation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in listItem">
+              <th>{{ item.item_id }}</th>
+              <template v-if="item.status == 6">
+                <td><a :href="item.detail.detail_url" target="_blank">{{ item.detail.name }}</a></td>
+                <td>{{ item.detail.new_price }}</td>
+                <td>{{ item.detail.new_qty }}</td>
+                <td>{{ item.detail.new_sellers }}</td>
+              </template>
+              <template v-else-if="item.status == 1">
+                <td colspan="4">Fetching...</td>
+              </template>
+              <template v-else-if="item.status == 0">
+                <td colspan="4">Waiting...</td>
+              </template>
+              <template v-else>
+                <td colspan="4">Error</td>
+              </template>
+              <td>
+                <button class="btn btn-danger btn-sm" @click="delItem(item.item_id)">Remove</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+    </template>
+    <!-- bricklink end -->
+
+    <!-- lego begin -->
+    <template v-if="site == 'lego'">
+        <table class="table">
+          <thead>
+            <tr>
+              <th width="8%">ID</th>
+              <th width="10%">Name</th>
+              <th>Regions</th>
+              <th width="8%">Operation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in listItem">
+              <th>{{ item.item_id }}</th>
+              <template v-if="item.status == 6">
+                <td>{{ item.name }}</td>
+                <td>
+                  <table class="table table-bordered avlTbl">
+                    <tr>
+                      <th>Region</th>
+                      <th width="16%" v-for="(dtl, region) in item.regions">
+                        <a v-if="dtl" :href="dtl.detail_url" target="_blank">{{ region }}</a>
+                        <a v-else>{{ region }}</a>
+                      </th>
+                    </tr>
+                    <tr>
+                      <th>Flags</th>
+                      <td v-for="dtl in item.regions">
+                        <template v-if="dtl">{{ dtl.flags }}</template>
+                        <template v-else>N/A</template>
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Availability</th>
+                      <td v-for="dtl in item.regions">
+                        <template v-if="dtl">{{ dtl.avls }}</template>
+                        <template v-else>N/A</template>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </template>
+              <template v-else-if="item.status == 1">
+                <td colspan="2">Fetching...</td>
+              </template>
+              <template v-else-if="item.status == 0">
+                <td colspan="2">Waiting...</td>
+              </template>
+              <template v-else>
+                <td colspan="2">Error</td>
+              </template>
+              <td>
+                <button class="btn btn-danger btn-sm" @click="delItem(item.item_id)">Remove</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+    </template>
+    <!-- lego end -->
+
+    <div style="border-top: 1px solid #eaeaea; padding-top: 8px;">
+      <div class="input-group mb-3" style="width:200px">
+        <input type="text" class="form-control" v-model="itemId" placeholder="">
+        <div class="input-group-append">
+          <button class="btn btn-primary" type="button" @click="addItem">Add</button>
+        </div>
+      </div>
+    </div>
+</div>
+
+<script>
+var baseUrl = "/";
+
+var mainApp = new Vue({
+    el: "#app",
+    data: {
+        site: 'bricklink',
+        listItem: [],
+        itemId: '',
+        taskNum: 0,
+        updateTime: '',
+        regions_loc: {},
+        sortField: 'qty',
+        sortAsc: false
+    },
+    mounted: function() {
+        this.initPage();
+    },
+    methods: {
+        initPage() {
+          var site = $.cookie('lego_site');
+          if (typeof site != 'undefined') {
+            this.$data.site = site;
+          }
+          this.getList();
+
+          var sortField = $.cookie('lego_sortField');
+          if (typeof sortField != 'undefined') {
+            this.$data.sortField = sortField;
+          }
+
+          var sortAsc = $.cookie('lego_sortAsc');
+          if (typeof sortAsc != 'undefined') {
+            this.$data.sortAsc = sortAsc=='1' ? false : true;
+          }
+        },
+        switchList(site) {
+            if (site == this.$data.site) {
+              return;
+            }
+            this.$data.listItem = [];
+            this.$data.site = site;
+            $.cookie('lego_site', site, {expires: 365});
+            this.getList();
+        },
+        getList() {
+          var that = this;
+          $.getJSON(baseUrl+'list', {site: this.$data.site}, function(res) {
+            if(res.errcode != 0){
+              alert('获取列表失败');
+              return;
+            }
+            that.$data.listItem = res.items;
+            that.sortList(that.$data.sortField);
+            that.$data.taskNum = res.tasks;
+            that.$data.updateTime = res.updateTime;
+            if (res.regions_loc) {
+              that.$data.regions_loc = res.regions_loc
+            }
+          });
+        },
+        addItem() {
+            var that = this;
+            var itemId = this.$data.itemId;
+            var site = this.$data.site;
+            $.ajax({
+              url: baseUrl+'add',
+              dataType: 'json',
+              type: 'post',
+              data: {'item_id': itemId, 'site': site},
+              success: function(res) {
+                if(res.errcode != 0){
+                  alert(res.errmsg);
+                  return;
+                }
+                that.$data.listItem.push({item_id: itemId, site: site, status: 0})
+                that.$data.itemId = '';
+              },
+              error: function() {
+                alert('添加失败');
+              }
+            });
+        },
+        delItem(itemId) {
+            var that = this;
+            $.ajax({
+              url: baseUrl+'del',
+              dataType: 'json',
+              type: 'post',
+              data: {'item_id': itemId, 'site': this.$data.site},
+              success: function(res) {
+                if(res.errcode != 0){
+                  alert(res.errmsg);
+                  return;
+                }
+                that.getList();
+              },
+              error: function() {
+                alert('删除失败');
+              }
+            });
+        },
+        refresh() {
+            var that = this;
+            $.getJSON(baseUrl+'refresh', {site: this.$data.site}, function(res){
+              if(res.errcode != 0){
+                alert(res.errmsg)
+                return
+              }
+              that.$data.taskNum = res.tasks
+            })
+        },
+        sortList(field) {
+          console.log(field, this.$data.sortField);
+          var sortAsc = this.$data.sortAsc;
+          if (field != this.$data.sortField) {
+            sortAsc = false;
+          }
+          this.$data.sortField = field;
+          $.cookie('lego_sortField', field, {expires: 365});
+          $.cookie('lego_sortAsc', sortAsc ? '0' : '1', {expires: 365});
+          if(field == 'qty') {
+            this.$data.listItem.sort(sortAsc ? this.sortByQtyAsc : this.sortByQtyDesc);
+          } else if(field == 'sellers') {
+            this.$data.listItem.sort(sortAsc ? this.sortBySellerAsc : this.sortBySellerDesc);
+          } else if(field == 'price') {
+            this.$data.listItem.sort(sortAsc ? this.sortByPriceAsc : this.sortByPriceDesc);
+          }
+          this.$data.sortAsc = !sortAsc;
+        },
+        sortByQtyAsc(a, b) {
+          return a.detail.new_qty - b.detail.new_qty;
+        },
+        sortByQtyDesc(a, b) {
+          return b.detail.new_qty - a.detail.new_qty;
+        },
+        sortBySellerAsc(a, b) {
+          return a.detail.new_sellers - b.detail.new_sellers;
+        },
+        sortBySellerDesc(a, b) {
+          return b.detail.new_sellers - a.detail.new_sellers;
+        },
+        sortByPriceAsc(a, b) {
+          return this.toInt(a.detail.new_price) - this.toInt(b.detail.new_price);
+        },
+        sortByPriceDesc(a, b) {
+          return this.toInt(b.detail.new_price) - this.toInt(a.detail.new_price);
+        },
+        toInt(s) {
+          return parseInt(s.split(' ')[1].replace(',',''));
+        }
+    }
+});
+</script>
+</body>
+</html>
