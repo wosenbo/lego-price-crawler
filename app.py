@@ -10,12 +10,15 @@ from datetime import datetime
 from const import *
 from task import init_task, search_bricklink, search_lego
 from flask_socketio import SocketIO, emit
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__, static_url_path='')
 app.secret_key = 'XubjIYaO7ZCba2jhFK'
 socketio = SocketIO(app)
 rdb = redis.StrictRedis('localhost', decode_responses=True)
 threadList = []
+
+scheduler = BackgroundScheduler()
 
 
 @app.after_request
@@ -70,6 +73,8 @@ def getList():
             item = {'item_id': item_id, 'site': site, 'status': 0}
         else:
             item = json.loads(item)
+            if 'history' in item and type(item['history']).__name__ != 'dict':
+                item['history'] = {}
         items.append(item)
     tasks = rdb.llen(f"legoTask:{site}")
     data = {
@@ -104,6 +109,21 @@ def deleteItem():
         return jsonify({'errcode': -1, 'errmsg': '未知站点'})
     rdb.srem(f"legoList:{site}", item_id)
     rdb.delete(f"legoItem:{site}:{item_id}")
+    return jsonify({'errcode': 0, 'errmsg': ''})
+
+
+@app.route('/refreshItem', methods=['post'])
+def updateItem():
+    item_id = request.form['item_id']
+    site = request.form['site']
+    key = f"legoItem:{site}:{item_id}"
+    res = rdb.get(key)
+    if res is None:
+        return jsonify({'errcode': -1, 'errmsg': '记录不存在'})
+    row = json.loads(res)
+    row['status'] = 0
+    rdb.set(key, json.dumps(row))
+    socketio.emit('onUpdate', row, broadcast=True, namespace='/ws')
     return jsonify({'errcode': 0, 'errmsg': ''})
 
 
@@ -145,6 +165,11 @@ def fetch_data():
                 if detail:
                     row['status'] = 6
                     row['detail'] = detail
+                    if 'history' not in row or type(row['history']).__name__ != 'dict':
+                        row['history'] = {}
+                    sdate = datetime.now().strftime('%Y-%m-%d')
+                    log = {'price': detail['new_price'], 'sellers': detail['new_sellers'], 'qty': detail['new_qty']}
+                    row['history'][sdate] = log
                 else:
                     row['status'] = -1
                 rdb.set(item_key, json.dumps(row))
@@ -180,6 +205,20 @@ def query_task():
         time.sleep(1)
 
 
+def refresh_all():
+    print('refresh all')
+    for site in SITES:
+        items = rdb.smembers(f"legoList:{site}")
+        for iid in items:
+            key = f"legoItem:{site}:{iid}"
+            res = rdb.get(key)
+            if res is None:
+                continue
+            row = json.loads(res)
+            row['status'] = 0
+            rdb.set(key, json.dumps(row))
+
+
 def main():
     for i in range(MAX_THREAD_NUM):
         th = Thread(target=fetch_data)
@@ -190,6 +229,9 @@ def main():
     producer = Thread(target=query_task)
     producer.daemon = True
     producer.start()
+
+    scheduler.add_job(func=refresh_all, trigger='cron', day_of_week='*', second=15, minute=30, hour=1)
+    scheduler.start()
 
     try:
         socketio.run(app)
