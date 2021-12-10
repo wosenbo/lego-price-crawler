@@ -14,7 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__, static_url_path='')
 app.secret_key = 'XubjIYaO7ZCba2jhFK'
-socketio = SocketIO(app)
+socketio = SocketIO(app, async_handlers=True)
 rdb = redis.StrictRedis('localhost', decode_responses=True)
 threadList = []
 
