@@ -16,6 +16,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@vue/composition-api@1.0.5"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.1.2"></script>
 <script src="https://cdn.jsdelivr.net/npm/vue-echarts@6.0.0"></script>
+<script src="https://unpkg.com/vuejs-datepicker"></script>
 <style type="text/css">
 .mainTab { margin-top: 15px; margin-bottom: 15px; }
 .avlTbl th { background-color: #f7f7f7; }
@@ -28,6 +29,10 @@
   .taskStatus { position: relative; margin: 15px 0; padding-bottom: 10px; right: 0; border-bottom: 1px solid #eaeaea; }
   .item-input { width: 100%; }
 }
+.star { color: #ff6600; cursor: pointer; }
+.dateobj { display: block; background-color: #f7f7f7; border-radius: 5px; cursor: pointer; }
+.olddate { color: #D0021B; }
+.newdate { color: #7ED321; }
 </style>
 </head>
 <body>
@@ -62,17 +67,28 @@
         <table class="table" style="min-width:930px;">
           <thead>
             <tr>
+              <th width="5%">Star</th>
               <th width="10%">ID</th>
+              <th width="10%">Retirement</th>
               <th>Name</th>
-              <th width="15%"><a @click="handleSort('price')" href="javascript:void(0)">Price <i v-if="sortField=='price'" :class="'bi-sort-'+(sortAsc?'up':'down')"></i></a></th>
-              <th width="15%"><a @click="handleSort('qty')" href="javascript:void(0)">Qty <i v-if="sortField=='qty'" :class="'bi-sort-'+(sortAsc?'up':'down')"></i></a></th>
-              <th width="15%"><a @click="handleSort('sellers')" href="javascript:void(0)">Sellers <i v-if="sortField=='sellers'" :class="'bi-sort-'+(sortAsc?'up':'down')"></i></a></th>
-              <th width="18%">Operation</th>
+              <th width="10%"><a @click="handleSort('price')" href="javascript:void(0)">Price <i v-if="sortField=='price'" :class="'bi-sort-'+(sortAsc?'up':'down')"></i></a></th>
+              <th width="10%"><a @click="handleSort('qty')" href="javascript:void(0)">Qty <i v-if="sortField=='qty'" :class="'bi-sort-'+(sortAsc?'up':'down')"></i></a></th>
+              <th width="10%"><a @click="handleSort('sellers')" href="javascript:void(0)">Sellers <i v-if="sortField=='sellers'" :class="'bi-sort-'+(sortAsc?'up':'down')"></i></a></th>
+              <th width="15%">Operation</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in listItem">
+              <th>
+                <span class="star" @click="starItem(item.item_id)">
+                  <i v-if="!item.star || item.star == 0" class="bi bi-star"></i>
+                  <i v-else class="bi bi-star-fill"></i>
+                </span>
+              </th>
               <th>{{ item.item_id }} <span v-if="item.status==1||item.status==0" class="spinner-border spinner-border-sm"></span></th>
+              <th>
+                <date-obj @input="setDate" :lid="item.item_id" :retirement="item.retirement_date"></date-obj>
+              </th>
               <template v-if="item.status != -1">
                 <td><a v-if="item.detail" :href="item.detail.detail_url" target="_blank">{{ item.detail.name }}</a></td>
                 <td><span v-if="item.detail">{{ item.detail.new_price }}</span></td>
@@ -83,9 +99,9 @@
                 <td colspan="4">Error</td>
               </template>
               <td>
-                <button class="btn btn-danger btn-sm" @click="delItem(item.item_id)">Remove</button>
+                <button class="btn btn-warning btn-sm" @click="hideItem(item.item_id)"><i class="bi bi-eye"></i></button>
                 <button class="btn btn-info btn-sm" @click="refreshItem(item.item_id)" :disabled="item.status==1||item.status==0"><i class="bi bi-arrow-clockwise"></i></button>
-                <button class="btn btn-info btn-sm" @click="showLog(item)"><i class="bi bi-graph-down"></i></button>
+                <button class="btn btn-success btn-sm" @click="showLog(item)"><i class="bi bi-graph-down"></i> History</button>
               </td>
             </tr>
           </tbody>
@@ -143,7 +159,8 @@
                 <td colspan="2">Error</td>
               </template>
               <td>
-                <button class="btn btn-danger btn-sm" @click="delItem(item.item_id)">Remove</button>
+                <button class="btn btn-warning btn-sm" @click="hideItem(item.item_id)"><i class="bi bi-eye"></i></button>
+                <button class="btn btn-danger btn-sm" @click="deleteItem(item.item_id)"><i class="bi bi-trash"></i></button>
                 <button class="btn btn-info btn-sm" @click="refreshItem(item.item_id)" :disabled="item.status==1||item.status==0"><i class="bi bi-arrow-clockwise"></i></button>
               </td>
             </tr>
@@ -157,7 +174,10 @@
       <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-body">
-            <v-chart autoresize :option="option" style="height: 400px"/>
+            <!-- <v-chart autoresize :option="option" style="height: 400px"/> -->
+            <lego-chart height="220" :option="option1"></lego-chart>
+            <lego-chart height="220" :option="option2"></lego-chart>
+            <lego-chart height="220" :option="option3"></lego-chart>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-default" data-dismiss="modal">
@@ -175,10 +195,63 @@
 var baseUrl = "/";
 var socket = io.connect(baseUrl+'ws');
 
-Vue.component("v-chart", VueECharts);
+//Vue.component("v-chart", VueECharts);
+
+var LegoChart = {
+  props: {
+    height: {
+      type: Number,
+      default: 400
+    },
+    option: {
+      type: Object
+    }
+  },
+  data() {
+    return {
+    }
+  },
+  components: {
+    'v-chart': VueECharts
+  },
+  template: '<v-chart autoresize :option="option" :style="\'height:\'+height+\'px\'" />'
+};
+
+var DateObj = {
+  props: ['retirement', 'lid'],
+  components: {
+    vuejsDatepicker
+  },
+  methods: {
+    onInput(d) {
+      this.$emit('input', this.lid, d);
+    }
+  },
+  computed: {
+    dateClass: function () {
+      var d = new Date();
+      var year = d.getFullYear();
+      var month = d.getMonth();
+      var day = d.getDate();
+      var nowtime = new Date(year, month, day).getTime();
+      var rtime = Date.parse(this.retirement + ' GMT +8');
+      if (rtime < nowtime) {
+        return 'olddate';
+      } else if (rtime > nowtime) {
+        return 'newdate';
+      }
+      return '';
+    }
+  },
+  template: '<div><vuejs-datepicker @input="onInput" :value="retirement" format="yyyy-MM-dd" :input-class="\'form-control form-control-sm \' + dateClass"></vuejs-datepicker></div>'
+};
 
 var mainApp = new Vue({
     el: "#app",
+    components: {
+      'lego-chart': LegoChart,
+      'date-obj': DateObj
+    },
     data: {
         site: 'bricklink',
         listItem: [],
@@ -188,10 +261,16 @@ var mainApp = new Vue({
         regions_loc: {},
         sortField: 'qty',
         sortAsc: false,
-        option: {}
+        option1: {},
+        option2: {},
+        option3: {},
+        nowTime: null
     },
     mounted: function() {
-        this.initPage();
+      this.initTime();
+      this.initPage();
+    },
+    updated: function() {
     },
     methods: {
         initPage() {
@@ -227,6 +306,14 @@ var mainApp = new Vue({
           });
 
           this.getList();
+        },
+        initTime: function() {
+          var d = new Date();
+          var year = d.getFullYear();
+          var month = d.getMonth();
+          var day = d.getDate();
+          d = new Date(year, month, day);
+          this.nowTime = d.getTime();
         },
         switchList(site) {
             if (site == this.$data.site) {
@@ -264,6 +351,36 @@ var mainApp = new Vue({
         sortLegoAsc(a, b) {
           return a.item_id - b.item_id;
         },
+        setDate(lid, d) {
+          var that = this;
+          var year = d.getFullYear();
+          var month = d.getMonth() + 1;
+          var day = d.getDate();
+          var dateStr = year + '-' + this.strPad(month) + '-' + this.strPad(day);
+          $.ajax({
+            url: baseUrl+'setRetirementDate',
+            dataType: 'json',
+            type: 'post',
+            data: {'item_id': lid, 'site': this.$data.site, 'date': dateStr},
+            success: function(res) {
+              if(res.errcode != 0){
+                alert(res.errmsg);
+                return;
+              }
+
+              var index = that.listItem.findIndex(v => v.item_id == lid);
+              var item = that.listItem[index];
+              item.retirement_date = dateStr;
+              that.listItem.splice(index, 1, item);
+            },
+            error: function() {
+              alert('刷新失败');
+            }
+          });
+        },
+        strPad(n) {
+          return n < 10 ? '0' + n : '' + n;
+        },
         addItem() {
             var that = this;
             var itemId = this.$data.itemId;
@@ -278,8 +395,12 @@ var mainApp = new Vue({
               type: 'post',
               data: {'item_id': itemId, 'site': site},
               success: function(res) {
-                if(res.errcode != 0){
+                if(res.errcode < 0){
                   alert(res.errmsg);
+                  return;
+                } else if(res.errcode == 1) {
+                  that.$data.itemId = '';
+                  that.getList();
                   return;
                 }
                 that.$data.listItem.push({item_id: itemId, site: site, status: 0})
@@ -331,12 +452,12 @@ var mainApp = new Vue({
             }
           }
 
-          const option = {
+          const option1 = {
             tooltip: {
               trigger: 'axis'
             },
             legend: {
-              data: ['Qty', 'Seller', 'Price']
+              data: ['Price']
             },
             xAxis: {
               type: 'category',
@@ -345,17 +466,8 @@ var mainApp = new Vue({
             yAxis: {
               type: 'value'
             },
+            color: ['#F5A623'],
             series: [
-              {
-                name: 'Qty',
-                data: qtys,
-                type: 'line'
-              },
-              {
-                name: 'Seller',
-                data: sellers,
-                type: 'line'
-              },
               {
                 name: 'Price',
                 data: prices,
@@ -363,14 +475,83 @@ var mainApp = new Vue({
               }
             ]
           };
-          this.$data.option = option;
+          this.$data.option1 = option1;
+
+          const option2 = {
+            tooltip: {
+              trigger: 'axis'
+            },
+            legend: {
+              data: ['Qty']
+            },
+            xAxis: {
+              type: 'category',
+              data: labels
+            },
+            yAxis: {
+              type: 'value'
+            },
+            color: ['#408FFF'],
+            series: [
+              {
+                name: 'Qty',
+                data: qtys,
+                type: 'line'
+              }
+            ]
+          };
+          this.$data.option2 = option2;
+
+          const option3 = {
+            tooltip: {
+              trigger: 'axis'
+            },
+            legend: {
+              data: ['Seller']
+            },
+            xAxis: {
+              type: 'category',
+              data: labels
+            },
+            yAxis: {
+              type: 'value'
+            },
+            color: ['#9013FE'],
+            series: [
+              {
+                name: 'Seller',
+                data: sellers,
+                type: 'line'
+              }
+            ]
+          };
+          this.$data.option3 = option3;
 
           $('#dataModal').modal('show');
         },
         addItemCallback(evt){
           console.log(evt)
         },
-        delItem(itemId) {
+        hideItem(itemId) {
+            var that = this;
+            $.ajax({
+              url: baseUrl+'hide',
+              dataType: 'json',
+              type: 'post',
+              data: {'item_id': itemId, 'site': this.$data.site},
+              success: function(res) {
+                if(res.errcode != 0){
+                  alert(res.errmsg);
+                  return;
+                }
+                that.getList();
+              },
+              error: function() {
+                alert('删除失败');
+              }
+            });
+        },
+        deleteItem(itemId) {
             var that = this;
             $.ajax({
               url: baseUrl+'del',
@@ -386,6 +567,28 @@ var mainApp = new Vue({
               },
               error: function() {
                 alert('删除失败');
+              }
+            });
+        },
+        starItem(itemId) {
+            var that = this;
+            $.ajax({
+              url: baseUrl+'star',
+              dataType: 'json',
+              type: 'post',
+              data: {'item_id': itemId, 'site': this.$data.site},
+              success: function(res) {
+                if(res.errcode != 0){
+                  alert(res.errmsg);
+                  return;
+                }
+                var index = that.listItem.findIndex(v => v.item_id == itemId);
+                var item = that.listItem[index];
+                item.star = res.star;
+                that.listItem.splice(index, 1, item);
+              },
+              error: function() {
+                alert('星标失败');
               }
             });
         },

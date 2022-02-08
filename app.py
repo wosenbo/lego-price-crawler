@@ -37,7 +37,7 @@ def auth():
             if auth[4:-5] == ADMIN_PASS:
                 return redirect(url_for('home'))
         except Exception as e:
-            print(f'Password error: {e}')
+            print(f"Password error: {e}")
     return app.send_static_file('auth.html')
 
 
@@ -73,6 +73,8 @@ def getList():
             item = {'item_id': item_id, 'site': site, 'status': 0}
         else:
             item = json.loads(item)
+            if 'hide' in item and item['hide'] == 1:
+                continue
             if 'history' in item and type(item['history']).__name__ != 'dict':
                 item['history'] = {}
         items.append(item)
@@ -94,6 +96,13 @@ def addItem():
     site = request.form['site']
     if site not in SITES:
         return jsonify({'errcode': -1, 'errmsg': '不支持的类型'})
+    itemkey = f"legoItem:{site}:{item_id}"
+    res = rdb.get(itemkey)
+    if res is not None:
+        row = json.loads(res)
+        row['hide'] = 0
+        rdb.set(itemkey, json.dumps(row))
+        return jsonify({'errcode': 1, 'errmsg': '激活隐藏记录'})
     key = 'legoList:'+site
     if rdb.sismember(key, item_id):
         return jsonify({'errcode': -1, 'errmsg': '不能添加重复记录'})
@@ -111,6 +120,57 @@ def deleteItem():
     rdb.delete(f"legoItem:{site}:{item_id}")
     return jsonify({'errcode': 0, 'errmsg': ''})
 
+
+@app.route('/hide', methods=['post'])
+def hideItem():
+    item_id = request.form['item_id']
+    site = request.form['site']
+    if site not in SITES:
+        return jsonify({'errcode': -1, 'errmsg': '未知站点'})
+    key = f"legoItem:{site}:{item_id}"
+    res = rdb.get(key)
+    if res is None:
+        return jsonify({'errcode': -1, 'errmsg': '记录不存在'})
+    row = json.loads(res)
+    row['hide'] = 1
+    rdb.set(key, json.dumps(row))
+    return jsonify({'errcode': 0, 'errmsg': ''})
+
+
+@app.route('/setRetirementDate', methods=['post'])
+def setRetirementDate():
+    item_id = request.form['item_id']
+    site = request.form['site']
+    date = request.form['date']
+    if site not in SITES:
+        return jsonify({'errcode': -1, 'errmsg': '未知站点'})
+    key = f"legoItem:{site}:{item_id}"
+    res = rdb.get(key)
+    if res is None:
+        return jsonify({'errcode': -1, 'errmsg': '记录不存在'})
+    row = json.loads(res)
+    row['retirement_date'] = date
+    rdb.set(key, json.dumps(row))
+    return jsonify({'errcode': 0, 'errmsg': ''})
+
+
+@app.route('/star', methods=['post'])
+def starItem():
+    item_id = request.form['item_id']
+    site = request.form['site']
+    if site not in SITES:
+        return jsonify({'errcode': -1, 'errmsg': '未知站点'})
+    key = f"legoItem:{site}:{item_id}"
+    res = rdb.get(key)
+    if res is None:
+        return jsonify({'errcode': -1, 'errmsg': '记录不存在'})
+    row = json.loads(res)
+    if 'star' not in row or row['star'] == 0:
+        row['star'] = 1
+    else:
+        row['star'] = 0
+    rdb.set(key, json.dumps(row))
+    return jsonify({'errcode': 0, 'errmsg': '', 'star': row['star']})
 
 @app.route('/refreshItem', methods=['post'])
 def updateItem():
