@@ -8,6 +8,7 @@ import traceback as tb
 from lxml import etree
 from datetime import datetime
 from const import *
+from config import ADMIN_PASS
 from task import init_task, search_bricklink, search_lego
 from flask_socketio import SocketIO, emit
 from apscheduler.schedulers.background import BackgroundScheduler

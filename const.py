@@ -1,5 +1,3 @@
-ADMIN_PASS = 'hYhtYGzjW8M5FEp3fN'
-
 MAX_THREAD_NUM = 5
 
 SITES = ['bricklink', 'lego']
