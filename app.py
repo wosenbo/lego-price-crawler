@@ -15,7 +15,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 app = Flask(__name__, static_url_path='')
 app.secret_key = 'XubjIYaO7ZCba2jhFK'
 socketio = SocketIO(app, async_handlers=True)
-rdb = redis.StrictRedis('localhost', decode_responses=True)
+rdb = redis.StrictRedis('127.0.0.1', decode_responses=True)
 threadList = []
 
 scheduler = BackgroundScheduler()
@@ -70,7 +70,7 @@ def getList():
     for item_id in rdb.smembers(f"legoList:{site}"):
         item = rdb.get(f"legoItem:{site}:{item_id}")
         if item is None:
-            item = {'item_id': item_id, 'site': site, 'status': 0}
+            item = {'item_id': item_id, 'site': site, 'status': Status.INIT}
         else:
             item = json.loads(item)
             if 'hide' in item and item['hide'] == 1:
@@ -181,7 +181,7 @@ def updateItem():
     if res is None:
         return jsonify({'errcode': -1, 'errmsg': '记录不存在'})
     row = json.loads(res)
-    row['status'] = 0
+    row['status'] = Status.INIT
     rdb.set(key, json.dumps(row))
     socketio.emit('onUpdate', row, broadcast=True, namespace='/ws')
     return jsonify({'errcode': 0, 'errmsg': ''})
@@ -198,7 +198,7 @@ def refresh():
         if not rdb.exists(item_key):
             continue
         row = json.loads(rdb.get(item_key))
-        row['status'] = 0
+        row['status'] = Status.INIT
         rdb.set(item_key, json.dumps(row))
     return jsonify({'errcode': 0, 'errmsg': '', 'tasks': len(items)})
 
@@ -223,7 +223,7 @@ def fetch_data():
             if row['site'] == 'bricklink':
                 detail = search_bricklink(row['item_id'])
                 if detail:
-                    row['status'] = 6
+                    row['status'] = Status.DONE
                     row['detail'] = detail
                     if 'history' not in row or type(row['history']).__name__ != 'dict':
                         row['history'] = {}
@@ -231,7 +231,7 @@ def fetch_data():
                     log = {'price': detail['new_price'], 'sellers': detail['new_sellers'], 'qty': detail['new_qty']}
                     row['history'][sdate] = log
                 else:
-                    row['status'] = -1
+                    row['status'] = Status.ERROR
                 rdb.set(item_key, json.dumps(row))
                 socketio.emit('onUpdate', row, broadcast=True, namespace='/ws')
             elif row['site'] == 'lego':
@@ -243,7 +243,7 @@ def fetch_data():
                 for region in REGIONS:
                     detail = search_lego(row['item_id'], region)
                     if detail:
-                        row['status'] = 6
+                        row['status'] = Status.DONE
                         if 'name' not in row or row['name'] == '':
                             row['name'] = detail['name']
                     else:
@@ -251,8 +251,8 @@ def fetch_data():
                     row['regions'][region] = detail
                     rdb.set(item_key, json.dumps(row))
                     socketio.emit('onUpdate', row, broadcast=True, namespace='/ws')
-                if row['status'] != 6:
-                    row['status'] = -1
+                if row['status'] != Status.DONE:
+                    row['status'] = Status.ERROR
                     rdb.set(item_key, json.dumps(row))
         except Exception as e:
             print(f"Task error: {e}")
@@ -275,7 +275,7 @@ def refresh_all():
             if res is None:
                 continue
             row = json.loads(res)
-            row['status'] = 0
+            row['status'] = Status.INIT
             rdb.set(key, json.dumps(row))
 
 

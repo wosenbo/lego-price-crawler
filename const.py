@@ -16,3 +16,10 @@ REGIONS = {
 REGIONS_LOC = {}
 for region in REGIONS:
     REGIONS_LOC[REGIONS[region]] = region
+
+
+class Status:
+    ERROR = -1
+    INIT = 0
+    PROCESSING = 1
+    DONE = 6
