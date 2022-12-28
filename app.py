@@ -22,6 +22,15 @@ threadList = []
 scheduler = BackgroundScheduler()
 
 
+def check_login():
+    auth = request.cookies.get('lego_auth')
+    if not auth:
+        return False
+    if auth[4:-5] != ADMIN_PASS:
+        return False
+    return True
+
+
 @app.after_request
 def cors(environ):
     environ.headers['Access-Control-Allow-Origin'] = '*'
@@ -32,13 +41,8 @@ def cors(environ):
 
 @app.route('/')
 def auth():
-    auth = request.cookies.get('lego_auth')
-    if auth:
-        try:
-            if auth[4:-5] == ADMIN_PASS:
-                return redirect(url_for('home'))
-        except Exception as e:
-            print(f"Password error: {e}")
+    if check_login():
+        return redirect(url_for('home'))
     return app.send_static_file('auth.html')
 
 
@@ -54,16 +58,15 @@ def login():
 
 @app.route('/home')
 def home():
-    auth = request.cookies.get('lego_auth')
-    if not auth:
-        return redirect('/')
-    if auth[4:-5] != ADMIN_PASS:
+    if not check_login():
         return redirect('/')
     return app.send_static_file('index.html')
 
 
 @app.route('/list')
 def getList():
+    if not check_login():
+        return redirect('/')
     site = request.args.get('site')
     if site not in SITES:
         return jsonify({'errcode': -1, 'errmsg': '未知站点'})
@@ -93,6 +96,8 @@ def getList():
 
 @app.route('/add', methods=['post'])
 def addItem():
+    if not check_login():
+        return redirect('/')
     item_id = request.form['item_id']
     site = request.form['site']
     if site not in SITES:
@@ -104,7 +109,7 @@ def addItem():
         row['hide'] = 0
         rdb.set(itemkey, json.dumps(row))
         return jsonify({'errcode': 1, 'errmsg': '激活隐藏记录'})
-    key = 'legoList:' + site
+    key = 'legoList:'+site
     if rdb.sismember(key, item_id):
         return jsonify({'errcode': -1, 'errmsg': '不能添加重复记录'})
     rdb.sadd(key, item_id)
@@ -113,6 +118,8 @@ def addItem():
 
 @app.route('/del', methods=['post'])
 def deleteItem():
+    if not check_login():
+        return redirect('/')
     item_id = request.form['item_id']
     site = request.form['site']
     if site not in SITES:
@@ -124,6 +131,8 @@ def deleteItem():
 
 @app.route('/hide', methods=['post'])
 def hideItem():
+    if not check_login():
+        return redirect('/')
     item_id = request.form['item_id']
     site = request.form['site']
     if site not in SITES:
@@ -140,6 +149,8 @@ def hideItem():
 
 @app.route('/setRetirementDate', methods=['post'])
 def setRetirementDate():
+    if not check_login():
+        return redirect('/')
     item_id = request.form['item_id']
     site = request.form['site']
     date = request.form['date']
@@ -157,6 +168,8 @@ def setRetirementDate():
 
 @app.route('/star', methods=['post'])
 def starItem():
+    if not check_login():
+        return redirect('/')
     item_id = request.form['item_id']
     site = request.form['site']
     if site not in SITES:
@@ -173,9 +186,10 @@ def starItem():
     rdb.set(key, json.dumps(row))
     return jsonify({'errcode': 0, 'errmsg': '', 'star': row['star']})
 
-
 @app.route('/refreshItem', methods=['post'])
 def updateItem():
+    if not check_login():
+        return redirect('/')
     item_id = request.form['item_id']
     site = request.form['site']
     key = f"legoItem:{site}:{item_id}"
@@ -191,6 +205,8 @@ def updateItem():
 
 @app.route('/refresh')
 def refresh():
+    if not check_login():
+        return redirect('/')
     site = request.args.get('site')
     if site not in SITES:
         return jsonify({'errcode': -1, 'errmsg': '未知站点'})
