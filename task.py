@@ -39,15 +39,15 @@ def search_lego(item_id, region):
         locale = REGIONS[region].lower()
         search_url = 'https://www.lego.com/api/graphql/SearchSuggestions'
         params = {
-          "operationName": "SearchSuggestions",
-          "variables": {
-            "query": str(item_id),
-            "visibility": {
-              "includeRetiredProducts": True
+            "operationName": "SearchSuggestions",
+            "variables": {
+                "query": str(item_id),
+                "visibility": {
+                    "includeRetiredProducts": True
+                },
+                "searchSessionId": 1
             },
-            "searchSessionId": 1
-          },
-          "query": "query SearchSuggestions($searchSessionId: Int, $query: String!, $suggestionLimit: Int, $productLimit: Int, $visibility: ProductVisibility) {\n  searchSuggestions(\n    searchSessionId: $searchSessionId\n    query: $query\n    suggestionLimit: $suggestionLimit\n    productLimit: $productLimit\n    visibility: $visibility\n  ) {\n    __typename\n    ... on Product {\n      ...Header_Product_ProductSuggestion\n      __typename\n    }\n    ... on SearchSuggestion {\n      text\n      __typename\n    }\n  }\n}\n\nfragment Header_Product_ProductSuggestion on Product {\n  id\n  productCode\n  name\n  slug\n  primaryImage(size: THUMBNAIL)\n  overrideUrl\n  ... on SingleVariantProduct {\n    variant {\n      ...Header_Variant_ProductSuggestion\n      __typename\n    }\n    __typename\n  }\n  ... on MultiVariantProduct {\n    variants {\n      ...Header_Variant_ProductSuggestion\n      __typename\n    }\n    __typename\n  }\n  ... on ReadOnlyProduct {\n    readOnlyVariant {\n      attributes {\n        pieceCount\n        ageRange\n        has3DModel\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nfragment Header_Variant_ProductSuggestion on ProductVariant {\n  id\n  price {\n    formattedAmount\n    centAmount\n    __typename\n  }\n  __typename\n}\n"
+            "query": "query SearchSuggestions($searchSessionId: Int, $query: String!, $suggestionLimit: Int, $productLimit: Int, $visibility: ProductVisibility) {\n  searchSuggestions(\n    searchSessionId: $searchSessionId\n    query: $query\n    suggestionLimit: $suggestionLimit\n    productLimit: $productLimit\n    visibility: $visibility\n  ) {\n    __typename\n    ... on Product {\n      ...Header_Product_ProductSuggestion\n      __typename\n    }\n    ... on SearchSuggestion {\n      text\n      __typename\n    }\n  }\n}\n\nfragment Header_Product_ProductSuggestion on Product {\n  id\n  productCode\n  name\n  slug\n  primaryImage(size: THUMBNAIL)\n  overrideUrl\n  ... on SingleVariantProduct {\n    variant {\n      ...Header_Variant_ProductSuggestion\n      __typename\n    }\n    __typename\n  }\n  ... on MultiVariantProduct {\n    variants {\n      ...Header_Variant_ProductSuggestion\n      __typename\n    }\n    __typename\n  }\n  ... on ReadOnlyProduct {\n    readOnlyVariant {\n      attributes {\n        pieceCount\n        ageRange\n        has3DModel\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nfragment Header_Variant_ProductSuggestion on ProductVariant {\n  id\n  price {\n    formattedAmount\n    centAmount\n    __typename\n  }\n  __typename\n}\n"
         }
         resp = requests.post(search_url, json=params, headers=headers, timeout=30)
         data = resp.json()
@@ -70,8 +70,8 @@ def search_lego(item_id, region):
                     "isPaginated": True,
                     "perPage": 18,
                     "sort": {
-                        "key":"RELEVANCE",
-                        "direction":"ASC"
+                        "key": "RELEVANCE",
+                        "direction": "ASC"
                     },
                     "filters": [
 

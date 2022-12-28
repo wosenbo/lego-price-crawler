@@ -24,9 +24,9 @@ scheduler = BackgroundScheduler()
 
 @app.after_request
 def cors(environ):
-    environ.headers['Access-Control-Allow-Origin']='*'
-    environ.headers['Access-Control-Allow-Method']='*'
-    environ.headers['Access-Control-Allow-Headers']='x-requested-with,content-type'
+    environ.headers['Access-Control-Allow-Origin'] = '*'
+    environ.headers['Access-Control-Allow-Method'] = '*'
+    environ.headers['Access-Control-Allow-Headers'] = 'x-requested-with,content-type'
     return environ
 
 
@@ -48,7 +48,7 @@ def login():
     if pwd != ADMIN_PASS:
         return 'Auth Failed'
     resp = make_response(redirect(url_for('home')))
-    resp.set_cookie('lego_auth', 'hkzd'+ADMIN_PASS+'abcde', max_age=31536000)
+    resp.set_cookie('lego_auth', 'hkzd' + ADMIN_PASS + 'abcde', max_age=31536000)
     return resp
 
 
@@ -104,7 +104,7 @@ def addItem():
         row['hide'] = 0
         rdb.set(itemkey, json.dumps(row))
         return jsonify({'errcode': 1, 'errmsg': '激活隐藏记录'})
-    key = 'legoList:'+site
+    key = 'legoList:' + site
     if rdb.sismember(key, item_id):
         return jsonify({'errcode': -1, 'errmsg': '不能添加重复记录'})
     rdb.sadd(key, item_id)
@@ -172,6 +172,7 @@ def starItem():
         row['star'] = 0
     rdb.set(key, json.dumps(row))
     return jsonify({'errcode': 0, 'errmsg': '', 'star': row['star']})
+
 
 @app.route('/refreshItem', methods=['post'])
 def updateItem():
