@@ -109,7 +109,7 @@ def addItem():
         row['hide'] = 0
         rdb.set(itemkey, json.dumps(row))
         return jsonify({'errcode': 1, 'errmsg': '激活隐藏记录'})
-    key = 'legoList:'+site
+    key = 'legoList:' + site
     if rdb.sismember(key, item_id):
         return jsonify({'errcode': -1, 'errmsg': '不能添加重复记录'})
     rdb.sadd(key, item_id)
@@ -185,6 +185,7 @@ def starItem():
         row['star'] = 0
     rdb.set(key, json.dumps(row))
     return jsonify({'errcode': 0, 'errmsg': '', 'star': row['star']})
+
 
 @app.route('/refreshItem', methods=['post'])
 def updateItem():
